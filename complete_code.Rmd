@@ -1,0 +1,172 @@
+---
+title: "Complete Code"
+output: html_notebook
+---
+
+This shows the complete code for the data analysis. No results are shown here. The query gave 1445737 articles from 2010/01/01 to present and atleast one affiliation is at USA. We used only first 25000 articles. 
+
+```{r code, eval=FALSE}
+
+## Load required libraries
+
+library(XML)
+library(easyPubMed)
+library(ggplot2)
+library(gridExtra)
+
+## Pubmed query
+
+myQuery <- "USA[Affiliation] AND (2010/01/01[PDAT] : 3000[PDAT])"
+myIdList <- get_pubmed_ids(myQuery)
+as.integer(as.character(myIdList$Count))
+
+## ...............Fetch and save records.........................
+
+recordsXml1 <- fetch_pubmed_data(pubmed_id_list = 
+                                   myIdList, retstart = 0, retmax = 5000)
+saveXML(recordsXml1, file = "record1.xml")
+
+recordsXml2 <- fetch_pubmed_data(pubmed_id_list = 
+                                   myIdList, retstart = 5000, retmax = 5000)
+saveXML(recordsXml2, file = "record2.xml")
+
+recordsXml3 <- fetch_pubmed_data(pubmed_id_list = 
+                                   myIdList, retstart = 10000, retmax = 5000)
+saveXML(recordsXml3, file = "record3.xml")
+
+recordsXml4 <- fetch_pubmed_data(pubmed_id_list = 
+                                   myIdList, retstart = 15000, retmax = 5000)
+saveXML(recordsXml4, file = "record4.xml")
+
+recordsXml5 <- fetch_pubmed_data(pubmed_id_list = 
+                                   myIdList, retstart = 20000, retmax = 5000)
+saveXML(recordsXml5, file = "record5.xml")
+
+##.......................................................
+
+## all xml files in the folder
+
+all.files <- list.files(pattern="\\.xml", full.names=TRUE)
+
+## Function to read the xml files
+
+dfList2 <- lapply(all.files, function(x){
+  xml <- xmlParse(x)
+  
+  ## Get Forenames of the authors
+  
+  forename1 <- xpathApply(xml, "//Author",
+                          function(x){
+                            if("ForeName" %in% names(x))
+                              xmlValue(x[["ForeName"]])
+                            else NA})
+  
+  ## ## Get lastname of the authors
+  
+  lastname1 <- xpathApply(xml, "//Author",
+                          function(x){
+                            if("LastName" %in% names(x))
+                              xmlValue(x[["LastName"]])
+                            else NA})
+  
+  ## make a data frame of names
+  
+  namedf <-  do.call(rbind, Map(data.frame, 
+                                fastname=forename1, 
+                                lastname=lastname1))
+  
+  ## Extract affiliation, journal name and keywords from the records
+  
+  aff <- xpathApply(xml, "//Affiliation", xmlValue)
+  jou <- xpathApply(xml, "//Title", xmlValue)
+  key <- xpathApply(xml, "//Keyword", xmlValue)
+
+  ## Return a list 
+  
+  return(list(namedf, aff, key, jou))
+  
+})
+
+## Function call
+
+dflist2 <- dfList2
+
+namedf <- do.call(rbind, list(dfList2[[1]][[1]], dfList2[[2]][[1]], dfList2[[3]][[1]], 
+                              dfList2[[4]][[1]], dfList2[[5]][[1]]))
+
+affiliation <- unlist(list(dfList2[[1]][[2]], dfList2[[2]][[2]], dfList2[[3]][[2]], 
+                           dfList2[[4]][[2]], dfList2[[5]][[2]]))
+
+keywords <- unlist(list(dfList2[[1]][[3]], dfList2[[2]][[3]], dfList2[[3]][[3]], 
+                        dfList2[[4]][[3]], dfList2[[5]][[3]]))
+
+journal <- unlist(list(dfList2[[1]][[4]], dfList2[[2]][[4]], dfList2[[3]][[4]], 
+                       dfList2[[4]][[4]], dfList2[[5]][[4]]))
+
+namedf$fastname <- as.character(namedf$fastname)
+namedf$lastname <- as.character(namedf$lastname)
+namedf$fullname <- paste(namedf$fastname, namedf$lastname)
+namedf <- namedf[complete.cases(namedf), ]
+nametab <- table(namedf$fullname)
+dfname <- as.data.frame(nametab)
+names <- c("Author", "Freq")
+colnames(dfname) <- names
+dfname <- dfname[order(-dfname$Freq),]
+dfname <- head(dfname, 10)
+
+
+keywords <- sapply(strsplit(keywords, " "), "[", 1)
+keywords <- toupper(keywords)
+keytab <- table(keywords)
+keydf <- as.data.frame(keytab)
+names <- c("Keywords", "Freq")
+colnames(keydf) <- names
+keydf <- keydf[order(-keydf$Freq),]
+keydf <- head(keydf, 10)
+
+
+journaltab <- table(journal)
+journaldf <- as.data.frame(journaltab)
+names <- c("Journal", "Freq")
+colnames(journaldf) <- names
+journaldf <- journaldf[order(-journaldf$Freq),]
+journaldf <- head(journaldf, 10)
+journaldf$Journal <- gsub("^((?:\\S+\\s+){3}\\S+).*", "\\1", journaldf$Journal)
+
+affiliation <- gsub("^([^,]*,[^,]*),.*$", "\\1", affiliation)
+affiliationtab <- table(affiliation)
+affiliationdf <- as.data.frame(affiliationtab)
+names <- c("Address", "Freq")
+colnames(affiliationdf) <- names
+
+
+## Results
+## plot Author statistics
+
+p1 <- ggplot(data = dfname, aes(x = Author, y = Freq)) + geom_bar(stat = "identity")
+p1 <- p1 + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+p1 <- p1 + labs(x = "Author's Name", y = "No. of Publications", 
+                caption = "Figure 1: Top ten stientiest based on number 
+                of publications")
+
+ggsave(filename = "Plot1.png", plot = p1)
+
+## Plot journal and keyword statistics
+
+p2 <- ggplot(data = keydf, aes(x = Keywords, y = Freq)) + geom_bar(stat = "identity")
+p2 <- p2 + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) 
+p2 <- p2 + labs(x = "Keyword", y = "Frequeny", 
+                caption = "Figure 2(a): Most used research keywords")
+
+p3 <- ggplot(data = journaldf, aes(x = Journal, y = Freq)) + geom_bar(stat = "identity")
+p3 <- p3 + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) 
+p3 <- p3 + labs(x = "Journal Name", y = "Frequency", 
+                caption = "Figure 2(b): Top Journals based on 
+                number of published articles")
+
+p4 <- grid.arrange(p2, p3, ncol = 2)
+ggsave(filename = "Plot2.png", plot = p4)
+
+```
+
+

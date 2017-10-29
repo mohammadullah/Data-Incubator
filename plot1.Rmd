@@ -1,0 +1,21 @@
+---
+title: "Author's Statistics"
+output: html_notebook
+---
+
+This Notebook shows the first plot created from the PubMed data analysis.This shows the top ten authors found from the 25000 publication records. Similar plot can also be done for affiliation as well. 
+
+
+```{r plot1}
+
+library(ggplot2)
+
+p1 <- ggplot(data = dfname, aes(x = Author, y = Freq)) + geom_bar(stat = "identity")
+p1 <- p1 + theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+p1 <- p1 + labs(x = "Author's Name", y = "No. of Publications", 
+                caption = "Figure 1: Top ten stientiest based on number 
+                of publications")
+p1
+
+```
+
